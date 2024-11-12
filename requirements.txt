@@ -1,0 +1,9 @@
+albumentations==1.4.8
+Django==4.2.13
+matplotlib==3.9.0
+nibabel==5.2.1
+numpy==1.26.4
+Pillow==10.3.0
+segmentation_models_pytorch==0.3.3
+torch==2.3.0
+tqdm==4.66.4

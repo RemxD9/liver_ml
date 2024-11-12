@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="{% static 'css/result.css' %}">
+    <title>Title</title>
+</head>
+<body>
+    <section class="slider">
+        <div class="slider-container">
+            <input type="range" id="slider" min="0" max="{{ shape }}" value="0" step="1">
+            <label for="slider">Слайс:</label>
+            <span id="slider-value">0</span>
+        </div>
+        <form action="{% url 'clear_input' %}" method="post">
+            {% csrf_token %}
+            <button type="submit">На главную</button>
+        </form>
+    </section>
+    <section>
+        <div class="graph">
+            <img id="image" src="{% static 'outputs/original_60.png' %}" width="640" height="480" alt="">
+        </div>
+        <div class="graph">
+            <img id="prediction" src="{% static 'outputs/prediction_60.png' %}" width="640" height="480" alt="">
+        </div>
+    </section>
+    <script>
+        const slider = document.getElementById('slider');
+        const sliderValue = document.getElementById('slider-value');
+        const originalImage = document.getElementById('image');
+        const predictionImage = document.getElementById('prediction');
+    
+        slider.addEventListener('input', () => {
+            const value = slider.value;
+            sliderValue.textContent = value;
+            originalImage.src = `{% static 'outputs/original_' %}${value}.png`;
+            predictionImage.src = `{% static 'outputs/prediction_' %}${value}.png`;
+        });
+    </script>
+</body>
+</html>
