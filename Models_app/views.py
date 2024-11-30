@@ -1,6 +1,8 @@
 from PIL import Image
+from albumentations.pytorch import ToTensorV2
 from matplotlib import pyplot as plt
 import albumentations as A
+import nibabel as nib
 import torch.nn as nn
 from tqdm import tqdm
 from medpy.io import load
@@ -106,7 +108,7 @@ class Model:
     def __init__(self, device, image_path):
         self.device = device
         self.orig_path = image_path
-        self.model = self.load_model(device)
+        self.model = ''
         self.data = self.load_data()
         self.flag = self.prepare()
 
@@ -118,60 +120,60 @@ class Model:
         return True
 
     def load_model(self, device):
-        checkpoint = torch.load('staticfiles/model/unet_liver_512_089.model')
+        checkpoint = torch.load('staticfiles/model/liver_512_089.pth', map_location=device)
         model = UNET()
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint)
         model.to(device)
+        model.eval()
+        self.model = model
         return self.model
 
     def load_data(self):
-        return load(self.orig_path)
+        mean, std = (-485.18832664531345, 492.3121911082333)
+        trans = A.Compose([A.Resize(height=512, width=512), ToTensorV2()])
+        ans = trans(image=((load(self.orig_path)[0] - mean) / std))
+        return ans['image']
 
     def show_result(self, image):
-        fig, (ax1, ax2) = plt.subplot(1, 2, figsize=(10, 5))
-        pred = (self.model(image.to(self.device).float().unsqueeze(0))
+        pred = (self.model
+                (image.to(self.device).float().unsqueeze(0))
                 .squeeze(0).cpu().detach() > 0.9)
         pred_8uc1 = (pred.numpy().squeeze() * 255).astype(np.uint8)
         contours_pred, _ = cv2.findContours(pred_8uc1,
                                             cv2.RETR_EXTERNAL,
                                             cv2.CHAIN_APPROX_SIMPLE)
-        # Пока так, подумаю как это распараллелить
-        ax1.imsave(f'staticfiles/output/original_1.png', image.squeeze(), cmap='gray')
+        plt.imsave('staticfiles/output/original_1.png', image.squeeze())
+        fig, ax2 = plt.subplots(figsize=(5, 5))
         ax2.imshow(image.squeeze(), cmap='gray')
         ax2.imshow(pred.squeeze(), alpha=0.5, cmap='autumn')
         for contour in contours_pred:
             ax2.plot(contour[:, 0, 0], contour[:, 0, 1], 'r', linewidth=2)
-        ax2.imsave(f'staticfiles/output/prediction_1.png')
+        ax2.axis('off')
+        fig.savefig('staticfiles/output/prediction_1.png', bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+        return
 
 
 def main_page(request):
     if request.method == 'POST':
         form = UploadForm(request.POST, request.FILES)
         if form.is_valid():
-            logger.info('Form is valid! Starting reading NiFTI file')
+            logger.info('Form is valid! Starting reading DCM file')
             nifti_file = form.cleaned_data['nifti_file']
             if nifti_file:
-                file_path = 'staticfiles/input/uploaded_image.nii'
+                file_path = 'staticfiles/input/uploaded_image.dcm'
                 with open(file_path, 'wb') as f:
                     for chunk in nifti_file.chunks():
                         f.write(chunk)
                 logger.info('Successfully saved NiFTI file! Preparing to show it.')
                 mean, std = (-485.18832664531345, 492.3121911082333)
-                # img_3d = nib.load(file_path).get_fdata().transpose(2, 0, 1)
-                trans = A.Compose([A.Resize(height=512, width=512)])
-                ans = trans(image=(load(file_path)[0] - mean) / std)
+                trans = A.Compose([A.Resize(height=512, width=512), ToTensorV2()])
+                ans = trans(image=((load(file_path)[0] - mean) / std))
                 img_3d = ans['image']
-                # for idx, img_slice in enumerate(img_3d):
-                # img_feature = np.clip(img_slice, 0, 1)
-                # transformed = trans(image=img_feature)
-                # img_feature_ = transformed['image'].squeeze(0).float().cpu().numpy()
-                # img_feature_ = (255 * (img_feature_ - img_feature_.min()) / (
-                # img_feature_.max() - img_feature_.min())).astype(np.uint8)
                 output_dir = 'staticfiles/input/'
-                output_image_pil = Image.fromarray(img_3d)
                 output_image_path = os.path.join(output_dir, f'uploaded_image.png')
-                output_image_pil.save(output_image_path)
-                logger.info('Successfully saved NiFTI file. Redirecting...')
+                #print(img_3d)
+                plt.imsave(output_image_path, img_3d[0], cmap='gray')
                 return redirect('watching_photos')
         else:
             logger.warn("You've most likely chosen a wrong file. Try again!")
@@ -191,7 +193,7 @@ def watching_photos(request):
 
 def predict(request):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    Model(device=device, image_path='staticfiles/input/uploaded_image.nii')
+    Model(device=device, image_path='staticfiles/input/uploaded_image.dcm')
     logger.info('Redirecting to results')
     return redirect('results')
 
@@ -200,8 +202,7 @@ def results(request):
     output_image_path = 'outputs/pred.png'
     shape = request.session.get('shape')
     return render(request, 'result.html',
-                  context={'output_image_path': output_image_path,
-                           'shape': int(shape) - 1})
+                  context={'output_image_path': output_image_path})
 
 
 def clear_input(request):

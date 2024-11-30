@@ -8,7 +8,7 @@ class UploadForm(forms.Form):
 
     def clean_nifti_file(self):
         file = self.cleaned_data.get('nifti_file')
-        if file:
-            if not file.name.endswith('.nii'):
-                raise ValidationError('Неверный формат файла. Ожидается файл с расширением .nii')
+        #if file:
+            #if not file.name.endswith('.nii'):
+                #raise ValidationError('Неверный формат файла. Ожидается файл с расширением .nii')
         return file
