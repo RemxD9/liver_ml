@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="{% static 'css/result.css' %}">
-    <title>Title</title>
 </head>
 <body>
     <section class="slider">
@@ -14,12 +13,35 @@
         </form>
     </section>
     <section>
-        <div class="graph">
-            <img id="image" src="{% static 'output/original_1.png' %}" width="640" height="480" alt="">
-        </div>
-        <div class="graph">
-            <img id="prediction" src="{% static 'output/prediction_1.png' %}" width="640" height="480" alt="">
-        </div>
-    </section>
+    <div class="graph">
+        <img id="image" src="{% static output_orig %}" width="640" height="480" alt="">
+    </div>
+    <button type="button" class="btn btn-primary" id="downloadOriginal">Скачать изображение</button>
+    <div class="graph">
+        <img id="prediction" src="{% static output_pred %}" width="640" height="480" alt="">
+    </div>
+    <button type="button" class="btn btn-primary" id="downloadPrediction">Скачать изображение</button>
+</section>
+<script>
+    document.getElementById('downloadOriginal').addEventListener('click', function() {
+        const url = "{% static output_orig %}";
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'original.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+
+    document.getElementById('downloadPrediction').addEventListener('click', function() {
+        const url = "{% static output_pred %}";
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'prediction.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+</script>
 </body>
 </html>

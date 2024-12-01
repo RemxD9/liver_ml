@@ -1,8 +1,6 @@
-from PIL import Image
 from albumentations.pytorch import ToTensorV2
 from matplotlib import pyplot as plt
 import albumentations as A
-import nibabel as nib
 import torch.nn as nn
 from tqdm import tqdm
 from medpy.io import load
@@ -11,10 +9,7 @@ import numpy as np
 import torch
 from django.shortcuts import redirect, render
 from Models_app.forms import UploadForm
-import logging
 import cv2
-
-logger = logging.getLogger('Views')
 
 
 def conv_plus_conv(in_channels: int, out_channels: int):
@@ -108,85 +103,82 @@ class Model:
     def __init__(self, device, image_path):
         self.device = device
         self.orig_path = image_path
-        self.model = ''
+        self.model = UNET()
         self.data = self.load_data()
         self.flag = self.prepare()
 
     def prepare(self):
-        if not self.model:
-            self.load_model(self.device)
+        self.load_model(self.device)
         data = self.load_data()
         tqdm(self.show_result(image=data))
         return True
 
     def load_model(self, device):
         checkpoint = torch.load('staticfiles/model/liver_512_089.pth', map_location=device)
-        model = UNET()
-        model.load_state_dict(checkpoint)
-        model.to(device)
-        model.eval()
-        self.model = model
-        return self.model
+        self.model.load_state_dict(checkpoint)
+        self.model.to(device)
+        self.model.eval()
+        return
 
     def load_data(self):
         mean, std = (-485.18832664531345, 492.3121911082333)
         trans = A.Compose([A.Resize(height=512, width=512), ToTensorV2()])
-        ans = trans(image=((load(self.orig_path)[0] - mean) / std))
+        img = load(self.orig_path)[0]
+        img[img > 1192] = 1192
+        ans = trans(image=((img - mean) / std))
         return ans['image']
 
     def show_result(self, image):
         pred = (self.model
                 (image.to(self.device).float().unsqueeze(0))
                 .squeeze(0).cpu().detach() > 0.9)
+
+        plt.imsave('staticfiles/output/original.png', image.squeeze(), cmap='gray')
+
+        fig = plt.figure(frameon=False)
+        fig.set_size_inches(1, 1)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        image = image.squeeze(0)
         pred_8uc1 = (pred.numpy().squeeze() * 255).astype(np.uint8)
-        contours_pred, _ = cv2.findContours(pred_8uc1,
-                                            cv2.RETR_EXTERNAL,
-                                            cv2.CHAIN_APPROX_SIMPLE)
-        plt.imsave('staticfiles/output/original_1.png', image.squeeze())
-        fig, ax2 = plt.subplots(figsize=(5, 5))
-        ax2.imshow(image.squeeze(), cmap='gray')
-        ax2.imshow(pred.squeeze(), alpha=0.5, cmap='autumn')
+        contours_pred, _ = cv2.findContours(pred_8uc1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        ax.imshow(image.squeeze(), cmap='gray')
+        ax.imshow(pred.squeeze(), alpha=0.5, cmap='gray')
         for contour in contours_pred:
-            ax2.plot(contour[:, 0, 0], contour[:, 0, 1], 'r', linewidth=2)
-        ax2.axis('off')
-        fig.savefig('staticfiles/output/prediction_1.png', bbox_inches='tight', pad_inches=0)
-        plt.close(fig)
-        return
+            ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'r', linewidth=1)
+        fig.savefig('staticfiles/output/prediction.png', dpi=512)
 
 
 def main_page(request):
     if request.method == 'POST':
         form = UploadForm(request.POST, request.FILES)
         if form.is_valid():
-            logger.info('Form is valid! Starting reading DCM file')
-            nifti_file = form.cleaned_data['nifti_file']
-            if nifti_file:
+            dcm_file = form.cleaned_data['dcm_file']
+            if dcm_file:
                 file_path = 'staticfiles/input/uploaded_image.dcm'
                 with open(file_path, 'wb') as f:
-                    for chunk in nifti_file.chunks():
+                    for chunk in dcm_file.chunks():
                         f.write(chunk)
-                logger.info('Successfully saved NiFTI file! Preparing to show it.')
                 mean, std = (-485.18832664531345, 492.3121911082333)
                 trans = A.Compose([A.Resize(height=512, width=512), ToTensorV2()])
-                ans = trans(image=((load(file_path)[0] - mean) / std))
+                img = load(file_path)[0]
+                img[img > 1192] = 1192
+                ans = trans(image=((img - mean) / std))
                 img_3d = ans['image']
                 output_dir = 'staticfiles/input/'
                 output_image_path = os.path.join(output_dir, f'uploaded_image.png')
-                #print(img_3d)
                 plt.imsave(output_image_path, img_3d[0], cmap='gray')
                 return redirect('watching_photos')
         else:
-            logger.warn("You've most likely chosen a wrong file. Try again!")
             return render(request, 'mainpage.html', {'form': form})
     else:
-        logger.warn("You've most likely chosen a file with not right format. Try again!")
         form = UploadForm()
     return render(request, 'mainpage.html', {'form': form})
 
 
 def watching_photos(request):
     image_path = 'input/uploaded_image.png'
-    logger.info('Redirected successfully!')
     return render(request, 'watching.html',
                   context={'image_path': image_path})
 
@@ -194,15 +186,15 @@ def watching_photos(request):
 def predict(request):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     Model(device=device, image_path='staticfiles/input/uploaded_image.dcm')
-    logger.info('Redirecting to results')
     return redirect('results')
 
 
 def results(request):
-    output_image_path = 'outputs/pred.png'
-    shape = request.session.get('shape')
+    output_pred_path = '/output/prediction.png'
+    output_image_path = '/output/original.png'
     return render(request, 'result.html',
-                  context={'output_image_path': output_image_path})
+                  context={'output_pred': output_pred_path,
+                           'output_orig': output_image_path})
 
 
 def clear_input(request):
@@ -210,7 +202,6 @@ def clear_input(request):
     try:
         for file_name in os.listdir(input_dir):
             file_path = os.path.join(input_dir, file_name)
-            logger.info('Cleaning images')
             if os.path.isfile(file_path):
                 os.remove(file_path)
     except Exception as e:
@@ -223,7 +214,6 @@ def clear_output(request):
     try:
         for file_name in os.listdir(output_dir):
             file_path = os.path.join(output_dir, file_name)
-            logger.info('Cleaning images')
             if os.path.isfile(file_path):
                 os.remove(file_path)
     except Exception as e:
