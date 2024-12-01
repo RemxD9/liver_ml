@@ -10,7 +10,11 @@ import torch
 from django.shortcuts import redirect, render
 from Models_app.forms import UploadForm
 import cv2
+import uuid
+import threading
 
+model_lock = threading.Lock()
+global_model = None
 
 def conv_plus_conv(in_channels: int, out_channels: int):
     return nn.Sequential(
@@ -99,26 +103,37 @@ class UNET(nn.Module):
         return self.sigmoid(self.out(x))
 
 
+def load_global_model():
+    global global_model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    global_model = UNET()
+    checkpoint = torch.load('staticfiles/model/liver_512_089.pth', map_location=device)
+    global_model.load_state_dict(checkpoint)
+    global_model.to(device)
+    global_model.eval()
+
+
+load_global_model()
+
+
+def get_user_uuid(request):
+    if 'user_uuid' not in request.session:
+        request.session['user_uuid'] = str(uuid.uuid4())
+    return request.session['user_uuid']
+
+
 class Model:
-    def __init__(self, device, image_path):
+    def __init__(self, device, image_path, output_dir):
         self.device = device
         self.orig_path = image_path
-        self.model = UNET()
+        self.output_dir = output_dir
+        self.model = global_model
         self.data = self.load_data()
         self.flag = self.prepare()
 
     def prepare(self):
-        self.load_model(self.device)
-        data = self.load_data()
-        tqdm(self.show_result(image=data))
+        self.show_result(self.data)
         return True
-
-    def load_model(self, device):
-        checkpoint = torch.load('staticfiles/model/liver_512_089.pth', map_location=device)
-        self.model.load_state_dict(checkpoint)
-        self.model.to(device)
-        self.model.eval()
-        return
 
     def load_data(self):
         mean, std = (-485.18832664531345, 492.3121911082333)
@@ -129,25 +144,25 @@ class Model:
         return ans['image']
 
     def show_result(self, image):
-        pred = (self.model
-                (image.to(self.device).float().unsqueeze(0))
-                .squeeze(0).cpu().detach() > 0.9)
-
-        plt.imsave('staticfiles/output/original.png', image.squeeze(), cmap='gray')
-
+        with model_lock:
+            pred = (self.model(image.to(self.device).float().unsqueeze(0)).squeeze(0).cpu().detach() > 0.9)
+        original_path = os.path.join(self.output_dir, 'original.png')
+        plt.imsave(original_path, image.squeeze(), cmap='gray')
         fig = plt.figure(frameon=False)
         fig.set_size_inches(1, 1)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        image = image.squeeze(0)
+        image = image.squeeze()
         pred_8uc1 = (pred.numpy().squeeze() * 255).astype(np.uint8)
         contours_pred, _ = cv2.findContours(pred_8uc1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         ax.imshow(image.squeeze(), cmap='gray')
         ax.imshow(pred.squeeze(), alpha=0.5, cmap='gray')
         for contour in contours_pred:
             ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'r', linewidth=1)
-        fig.savefig('staticfiles/output/prediction.png', dpi=512)
+
+        prediction_path = os.path.join(self.output_dir, 'prediction.png')
+        fig.savefig(prediction_path, dpi=512)
 
 
 def main_page(request):
@@ -156,19 +171,23 @@ def main_page(request):
         if form.is_valid():
             dcm_file = form.cleaned_data['dcm_file']
             if dcm_file:
-                file_path = 'staticfiles/input/uploaded_image.dcm'
+                user_uuid = get_user_uuid(request)
+                input_dir = f'staticfiles/input/{user_uuid}/'
+                os.makedirs(input_dir, exist_ok=True)
+                file_path = os.path.join(input_dir, f'{uuid.uuid4()}.dcm')
                 with open(file_path, 'wb') as f:
                     for chunk in dcm_file.chunks():
                         f.write(chunk)
+                request.session['uploaded_file_path_dcm'] = file_path
                 mean, std = (-485.18832664531345, 492.3121911082333)
                 trans = A.Compose([A.Resize(height=512, width=512), ToTensorV2()])
                 img = load(file_path)[0]
                 img[img > 1192] = 1192
                 ans = trans(image=((img - mean) / std))
                 img_3d = ans['image']
-                output_dir = 'staticfiles/input/'
-                output_image_path = os.path.join(output_dir, f'uploaded_image.png')
+                output_image_path = os.path.join(input_dir, f'uploaded_image.png')
                 plt.imsave(output_image_path, img_3d[0], cmap='gray')
+                request.session['uploaded_file_path_png'] = output_image_path
                 return redirect('watching_photos')
         else:
             return render(request, 'mainpage.html', {'form': form})
@@ -178,44 +197,57 @@ def main_page(request):
 
 
 def watching_photos(request):
-    image_path = 'input/uploaded_image.png'
-    return render(request, 'watching.html',
-                  context={'image_path': image_path})
+    file_path = request.session.get('uploaded_file_path_png')
+    if not file_path or not os.path.exists(file_path):
+        return redirect('main')
+    return render(request, 'watching.html', context={'image_path': file_path[12:]})
 
 
 def predict(request):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    Model(device=device, image_path='staticfiles/input/uploaded_image.dcm')
+    user_uuid = get_user_uuid(request)
+    output_dir = f'staticfiles/output/{user_uuid}/'
+    os.makedirs(output_dir, exist_ok=True)
+
+    file_path = request.session.get('uploaded_file_path_dcm')
+    if not file_path or not os.path.exists(file_path):
+        return redirect('main')
+
+    Model(device=device, image_path=file_path, output_dir=output_dir)
+    request.session['output_dir'] = output_dir
     return redirect('results')
 
 
 def results(request):
-    output_pred_path = '/output/prediction.png'
-    output_image_path = '/output/original.png'
+    user_uuid = get_user_uuid(request)
+    output_dir = request.session.get('output_dir', '')
+    if not output_dir or not os.path.exists(output_dir):
+        return redirect('main')
+
+    output_pred_path = os.path.join(output_dir, 'prediction.png')
+    output_image_path = os.path.join(output_dir, 'original.png')
     return render(request, 'result.html',
-                  context={'output_pred': output_pred_path,
-                           'output_orig': output_image_path})
+                  context={'output_pred': output_pred_path[12:],
+                           'output_orig': output_image_path[12:]})
 
 
 def clear_input(request):
-    input_dir = 'staticfiles/input/'
-    try:
+    user_uuid = get_user_uuid(request)
+    input_dir = f'staticfiles/input/{user_uuid}/'
+    if os.path.exists(input_dir):
         for file_name in os.listdir(input_dir):
             file_path = os.path.join(input_dir, file_name)
             if os.path.isfile(file_path):
                 os.remove(file_path)
-    except Exception as e:
-        pass
     return redirect('clear_output')
 
 
 def clear_output(request):
-    output_dir = 'staticfiles/outputs/'
-    try:
+    user_uuid = get_user_uuid(request)
+    output_dir = f'staticfiles/output/{user_uuid}/'
+    if os.path.exists(output_dir):
         for file_name in os.listdir(output_dir):
             file_path = os.path.join(output_dir, file_name)
             if os.path.isfile(file_path):
                 os.remove(file_path)
-    except Exception as e:
-        pass
     return redirect('main')
