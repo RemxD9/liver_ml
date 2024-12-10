@@ -5,12 +5,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'css/annotation.css' %}">
     <title>Annotation Tool</title>
 </head>
 <body>
-<h1>Annotation Tool</h1>
+<h1>Редактирование</h1>
 <canvas id="imageCanvas"></canvas>
-<button onclick="saveMask()">Скачать маску и отправить данные для дообучения</button>
+<button onclick="saveMask()">Скачать и отправить данные для дообучения</button>
 <!--    <button onclick="pushMask()">Отправить маску разработчикам</button>-->
 
 <script>

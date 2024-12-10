@@ -1,5 +1,5 @@
 body {
-    background-color: #20124d;
+    background-color: white;
     color: white;
     margin: 0;
     font-family: Arial, sans-serif;
@@ -7,8 +7,6 @@ body {
 
 h2 {
     margin: 0 auto 55px;
-    background-image: linear-gradient(to right, #f22, #f2f, #22f, #2ff, #2f2, #ff2);
-    color: transparent;
     -webkit-background-clip: text;
     background-clip: text;
 }
@@ -26,13 +24,14 @@ input {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 400px;
+    width: 600px;
     padding: 40px;
     transform: translate(-50%, -50%);
     background: rgba(0, 0, 0, 0.5);
     box-sizing: border-box;
-    box-shadow: 0 15px 25px rgba(0, 0, 0, 0.6);
-    border-radius: 10px;
+    box-shadow: 0 15px 25px rgba(0, 0, 0, 0.5);
+    border-radius: 20px;
+    text-align: center;
 }
 
 p {
@@ -40,6 +39,8 @@ p {
     flex-direction: column;
     gap: 15px;
 }
+
+
 
 button {
     display: block;
@@ -54,11 +55,12 @@ button {
     position: relative;
     z-index: 0;
     border-radius: 10px;
+    font-size: 25px;
 }
 
 button:before {
     content: '';
-    background: linear-gradient(45deg, #ff0000, #ff7300, #fffb00, #48ff00, #00ffd5, #002bff, #7a00ff, #ff00c8, #ff0000);
+    background: linear-gradient(#FFFFFF, #FFFAFA);
     position: absolute;
     top: -2px;
     left:-2px;
@@ -73,28 +75,35 @@ button:before {
     border-radius: 10px;
 }
 
+/* Эффект при наведении на кнопку */
+button:hover {
+  border-color: #666; /* Светло-серая рамка */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Легкая тень */
+}
+
+/* Эффект при нажатии на кнопку */
 button:active {
-    color: #000
+  background-color: #222; /* Еще более темный фон при нажатии */
+  border-color: #444; /* Более темная рамка */
+  transform: scale(0.98); /* Слегка уменьшает размер кнопки */
 }
 
-button:active:after {
-    background: transparent;
-}
-
-button:hover:before {
-    opacity: 1;
-}
-
+/* Псевдоэлемент ::after для добавления линии или анимации */
 button:after {
-    z-index: -1;
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: #111;
-    left: 0;
-    top: 0;
-    border-radius: 10px;
+  content: ''; /* Псевдоэлемент без текста */
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 4px; /* Высота линии */
+  background-color: #fff; /* Белая линия */
+  transform: scaleX(0); /* Скрываем линию по умолчанию */
+  transition: transform 0.3s ease; /* Плавное появление линии */
+}
+
+/* Эффект при наведении, показываем линию */
+button:hover:after {
+  transform: scaleX(0.5); /* Показываем линию при наведении */
 }
 
 @keyframes glowing {

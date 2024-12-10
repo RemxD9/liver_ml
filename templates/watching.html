@@ -7,19 +7,21 @@
     <link rel="stylesheet" href="{% static 'css/watch.css' %}">
 </head>
 <body>
-    <section class="photo">
-        <h2 class="photo-show">Ваше изображение:</h2>
-        <div class="graph">
-            <img src="{% static image_path %}" width="240" height="240" alt="">
-        </div>
-    </section>
-    <section class="choice">
-        <div class="action-selection">
-            <form id="action-form" action="{% url 'predict' %}" method="post">
-                {% csrf_token %}
-                <button type="submit">Пропуск изображения через модель</button>
-            </form>
-        </div>
+    <section class="box">
+        <section class="photo">
+            <h2 class="photo-show">Ваше изображение:</h2>
+            <div class="graph">
+                <img src="{% static image_path %}" width="240" height="240" alt="">
+            </div>
+        </section>
+        <section class="choice">
+            <div class="action-selection">
+                <form id="action-form" action="{% url 'predict' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit">Сегментация</button>
+                </form>
+            </div>
+        </section>
     </section>
 </body>
 </html>
