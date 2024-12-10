@@ -194,7 +194,7 @@ def main_page(request):
                 output_image_path = os.path.join(input_dir, f'uploaded_image.png')
                 plt.imsave(output_image_path, img_3d[0], cmap='gray')
                 request.session['uploaded_file_path_png'] = output_image_path
-                return redirect('watching_photos')
+                return redirect('predict')
         else:
             return render(request, 'mainpage.html', {'form': form})
     else:

@@ -10,7 +10,7 @@
         <form action="{% url 'clear_input' %}" method="post">
             {% csrf_token %}
             <button type="submit" class="first-button">На главную</button>
-            <button type="button" class="btn btn-primary" id="addAnnotation">Изменить обводку</button>
+            <button type="button" class="btn btn-primary" id="addAnnotation">Изменить контур</button>
         </form>
     </section>
     <section class="main">
@@ -18,13 +18,13 @@
         <div class="graph">
             <img id="image" src="{% static output_orig %}" width="512" height="512" alt="">
         </div>
-        <button type="button" class="btn btn-primary" id="downloadOriginal">Скачать изображение</button>
+        <button type="button" class="btn btn-primary" id="downloadOriginal">Скачать</button>
     </section>
     <section class="box2">
         <div class="graph">
             <img id="prediction" src="{% static output_pred %}" width="512" height="512" alt="">
         </div>
-    <button type="button" class="btn btn-primary" id="downloadPrediction">Скачать изображение</button>
+    <button type="button" class="btn btn-primary" id="downloadPrediction">Скачать</button>
         </section>
 
 </section>
