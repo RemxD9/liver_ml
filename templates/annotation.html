@@ -1,0 +1,64 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annotation Tool</title>
+</head>
+<body>
+<h1>Annotation Tool</h1>
+<canvas id="imageCanvas"></canvas>
+<button onclick="saveMask()">Скачать маску и отправить данные для дообучения</button>
+<!--    <button onclick="pushMask()">Отправить маску разработчикам</button>-->
+
+<script>
+        const canvas = document.getElementById('imageCanvas');
+        const ctx = canvas.getContext('2d');
+        let points = [];
+
+        // Load image
+        const img = new Image();
+        img.src = "{% static img %}"
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+        };
+
+
+        // Handle clicks
+        canvas.addEventListener('click', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            points.push({ x, y });
+            ctx.fillStyle = "red";
+            ctx.fillRect(x - 2, y - 2, 4, 4);
+        });
+
+        // Send points to the server
+        function saveMask() {
+            fetch('/save_mask/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ points }),
+            }).then(response => response.json())
+              .then(data => {
+              if (data.redirect_url) {
+                  window.location.href = data.redirect_url;
+              }
+              if (data.redirect_main) {
+                  setTimeout(() => {
+                      window.location.href = data.redirect_main;
+                  }, 1000); // Задержка для второго редиректа
+              }
+          });
+        }
+
+
+
+</script>
+</body>
+</html>

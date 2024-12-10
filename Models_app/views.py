@@ -1,4 +1,5 @@
 from albumentations.pytorch import ToTensorV2
+from django.urls import reverse
 from matplotlib import pyplot as plt
 import albumentations as A
 import torch.nn as nn
@@ -12,9 +13,15 @@ from Models_app.forms import UploadForm
 import cv2
 import uuid
 import threading
+from django.http import JsonResponse, HttpResponse
+import json
+from django.views.decorators.csrf import csrf_exempt
+import pydicom
+from matplotlib.path import Path
 
 model_lock = threading.Lock()
 global_model = None
+
 
 def conv_plus_conv(in_channels: int, out_channels: int):
     return nn.Sequential(
@@ -182,7 +189,6 @@ def main_page(request):
                 mean, std = (-485.18832664531345, 492.3121911082333)
                 trans = A.Compose([A.Resize(height=512, width=512), ToTensorV2()])
                 img = load(file_path)[0]
-                img[img > 1192] = 1192
                 ans = trans(image=((img - mean) / std))
                 img_3d = ans['image']
                 output_image_path = os.path.join(input_dir, f'uploaded_image.png')
@@ -251,3 +257,53 @@ def clear_output(request):
             if os.path.isfile(file_path):
                 os.remove(file_path)
     return redirect('main')
+
+
+def annotation(request):
+    output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
+    original_path = os.path.join(output_dir, 'original.png')
+    data = {'img': original_path[11:]}
+    return render(request, 'annotation.html', data)
+
+
+def generate_mask(points, dir_save):
+    mask = np.zeros((512, 512), dtype=np.uint8)
+
+    if len(points) > 2:
+        path = Path([(point["x"], point["y"]) for point in points])
+        y_indices, x_indices = np.meshgrid(np.arange(mask.shape[0]), np.arange(mask.shape[1]))
+        points_array = np.column_stack((x_indices.ravel(), y_indices.ravel()))
+        mask[path.contains_points(points_array).reshape(mask.shape)] = 255
+
+        # Поворот на 90 градусов по часовой стрелке
+        rotated_image = np.rot90(mask, k=3)
+
+        # Горизонтальное отражение
+        flipped_image = np.fliplr(rotated_image)
+
+        plt.imsave(dir_save, flipped_image, cmap="gray")
+
+
+@csrf_exempt
+def save_mask(request):
+    output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
+    save_dir = os.path.join(output_dir, 'client.png')
+    if request.method == "POST":
+        data = json.loads(request.body)
+        points = data.get('points', [])
+        generate_mask(points, save_dir)
+
+    return JsonResponse({'redirect_url': reverse('download_file'), 'redirect_main': reverse('main')})
+
+
+def download_file(request):
+    output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
+    save_dir = os.path.join(output_dir, 'client.png')
+
+    with open(save_dir, 'rb') as f:
+        file_data = f.read()
+
+    response = HttpResponse(file_data, content_type='image/png')
+    response['Content-Disposition'] = f'attachment; filename="client_mask.png"'
+
+    return response

@@ -13,4 +13,7 @@ urlpatterns = [
     path('results/', views.results, name='results'),
     path('clear-input/', views.clear_input, name='clear_input'),
     path('clear-output/', views.clear_output, name='clear_output'),
+    path('annotation/', views.annotation, name='annotation'),
+    path('save_mask/', views.save_mask, name='save_mask'),
+    path('download_file/', views.download_file, name='download_file'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
