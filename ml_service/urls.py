@@ -16,4 +16,6 @@ urlpatterns = [
     path('annotation/', views.annotation, name='annotation'),
     path('save_mask/', views.save_mask, name='save_mask'),
     path('download_file/', views.download_file, name='download_file'),
+    path('add_mask/', views.add_mask, name='add_mask'),
+    path('del_mask/', views.del_mask, name='del_mask'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

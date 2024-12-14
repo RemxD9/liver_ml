@@ -18,6 +18,7 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 import pydicom
 from matplotlib.path import Path
+import shutil
 
 model_lock = threading.Lock()
 global_model = None
@@ -171,6 +172,8 @@ class Model:
         prediction_path = os.path.join(self.output_dir, 'prediction.png')
         fig.savefig(prediction_path, dpi=512)
 
+        np.save(os.path.join(self.output_dir, 'original.npy'), image.squeeze())
+
 
 def main_page(request):
     if request.method == 'POST':
@@ -268,6 +271,10 @@ def annotation(request):
 
 def generate_mask(points, dir_save):
     mask = np.zeros((512, 512), dtype=np.uint8)
+    dir_png = os.path.join(dir_save, 'client.png')
+    dir_np = os.path.join(dir_save, 'client.npy')
+    dir_original_np = os.path.join(dir_save, 'original.npy')
+    dir_original = os.path.join(dir_save, 'original.png')
 
     if len(points) > 2:
         path = Path([(point["x"], point["y"]) for point in points])
@@ -275,23 +282,35 @@ def generate_mask(points, dir_save):
         points_array = np.column_stack((x_indices.ravel(), y_indices.ravel()))
         mask[path.contains_points(points_array).reshape(mask.shape)] = 255
 
-        # Поворот на 90 градусов по часовой стрелке
         rotated_image = np.rot90(mask, k=3)
 
-        # Горизонтальное отражение
         flipped_image = np.fliplr(rotated_image)
 
-        plt.imsave(dir_save, flipped_image, cmap="gray")
+        fig = plt.figure(frameon=False)
+        fig.set_size_inches(1, 1)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+
+        load_orig = np.load(dir_original_np)
+        if os.path.exists(dir_np):
+            flipped_image = np.logical_or(np.load(dir_np), flipped_image)
+
+        ax.imshow(load_orig, cmap='gray')
+        ax.imshow(flipped_image, alpha=0.5, cmap='gray')
+
+        fig.savefig(dir_original, dpi=512)
+        plt.imsave(dir_png, flipped_image, cmap="gray")
+        np.save(dir_np, flipped_image)
 
 
 @csrf_exempt
 def save_mask(request):
     output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
-    save_dir = os.path.join(output_dir, 'client.png')
     if request.method == "POST":
         data = json.loads(request.body)
         points = data.get('points', [])
-        generate_mask(points, save_dir)
+        generate_mask(points, output_dir)
 
     return JsonResponse({'redirect_url': reverse('download_file'), 'redirect_main': reverse('main')})
 
@@ -307,3 +326,32 @@ def download_file(request):
     response['Content-Disposition'] = f'attachment; filename="client_mask.png"'
 
     return response
+
+
+@csrf_exempt
+def add_mask(request):
+    output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
+    original_dir = os.path.join(output_dir, 'original.png')
+
+    if request.method == "POST":
+        data = json.loads(request.body)
+        points = data.get('points', [])
+        generate_mask(points, output_dir)
+
+    data = {'img': original_dir[11:]}
+    return render(request, 'annotation.html', data)
+
+
+@csrf_exempt
+def del_mask(request):
+    output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
+    original_dir = os.path.join(output_dir, 'original.png')
+    original_dir_np = os.path.join(output_dir, 'original.npy')
+
+    os.remove(os.path.join(output_dir, 'client.npy'))
+
+    data = {'img': original_dir[11:]}
+
+    plt.imsave(original_dir, np.load(original_dir_np), cmap="gray")
+
+    return render(request, 'annotation.html', data)

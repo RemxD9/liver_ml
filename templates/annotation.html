@@ -10,8 +10,17 @@
 </head>
 <body>
 <h1>Редактирование</h1>
+<h2>Инструкция:<br><br>1) Если на изображении несколько областей контура, то поочереди обведите каждый, нажимая после
+    выделения одного "Добавить контур"<br><br>
+    2) Если хотите сбросить выделение, нажмите "Сбросить"<br><br>
+    3) Если довольны результатом, то нажмите "Скачать"
+</h2>>
 <canvas id="imageCanvas"></canvas>
-<button onclick="saveMask()">Скачать и отправить данные для дообучения</button>
+<div class="buttons">
+    <button class="but_add" onclick="addMask()">Добавить контур</button>
+    <button onclick="saveMask()">Скачать и отправить данные для дообучения</button>
+    <button class="but_add" onclick="delMask()">Сбросить</button>
+</div>
 <!--    <button onclick="pushMask()">Отправить маску разработчикам</button>-->
 
 <script>
@@ -53,10 +62,36 @@
               if (data.redirect_main) {
                   setTimeout(() => {
                       window.location.href = data.redirect_main;
-                  }, 1000); // Задержка для второго редиректа
+                  }, 1000);
               }
           });
-        }
+        };
+
+        function addMask() {
+            fetch('/add_mask/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ points }),
+            })
+
+            setTimeout(() => {
+                      location.reload();
+                  }, 1000);
+        };
+
+        function delMask() {
+            fetch('/del_mask/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            })
+
+            setTimeout(() => {
+                      location.reload();
+                  }, 1000);
+        };
+
+
+
 
 
 
