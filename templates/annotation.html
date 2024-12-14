@@ -10,14 +10,17 @@
 </head>
 <body>
 <h1>Редактирование</h1>
-<h2>Инструкция:<br><br>1) Если на изображении несколько областей контура, то поочереди обведите каждый, нажимая после
+<h2>Инструкция:<br><br>
+    1) Если на изображении несколько областей контура, то поочереди обведите каждый, нажимая после
     выделения одного "Добавить контур"<br><br>
-    2) Если хотите сбросить выделение, нажмите "Сбросить"<br><br>
-    3) Если довольны результатом, то нажмите "Скачать"
+    2) Если хотите вернуться на шаг назад в выделении контура, нажмите "Назад"<br><br>
+    3) Если хотите сбросить выделение, нажмите "Сбросить"<br><br>
+    4) Нажмите "Скачать"
 </h2>>
 <canvas id="imageCanvas"></canvas>
 <div class="buttons">
     <button class="but_add" onclick="addMask()">Добавить контур</button>
+    <button class="but_add" onclick="backMask()">Назад</button>
     <button onclick="saveMask()">Скачать и отправить данные для дообучения</button>
     <button class="but_add" onclick="delMask()">Сбросить</button>
 </div>
@@ -81,6 +84,18 @@
 
         function delMask() {
             fetch('/del_mask/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            })
+
+            setTimeout(() => {
+                      location.reload();
+                  }, 1000);
+        };
+
+
+        function backMask() {
+            fetch('/back_mask/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
             })

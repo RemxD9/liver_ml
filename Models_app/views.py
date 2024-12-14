@@ -3,7 +3,6 @@ from django.urls import reverse
 from matplotlib import pyplot as plt
 import albumentations as A
 import torch.nn as nn
-from tqdm import tqdm
 from medpy.io import load
 import os
 import numpy as np
@@ -13,10 +12,9 @@ from Models_app.forms import UploadForm
 import cv2
 import uuid
 import threading
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpRequest
 import json
 from django.views.decorators.csrf import csrf_exempt
-import pydicom
 from matplotlib.path import Path
 import shutil
 
@@ -264,19 +262,32 @@ def clear_output(request):
 
 def annotation(request):
     output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
-    original_path = os.path.join(output_dir, 'original.png')
+    step = get_step_dir(output_dir)
+    if os.path.exists(os.path.join(output_dir, step, 'original.png')):
+        original_path = os.path.join(output_dir, step, 'original.png')
+    else:
+        original_path = os.path.join(output_dir, 'original.png')
+
     data = {'img': original_path[11:]}
     return render(request, 'annotation.html', data)
 
 
+def get_step_dir(dir, plus: int = 0) -> str:
+    folders = [int(i.split('/')[-1]) for i in os.listdir(dir) if os.path.isdir(os.path.join(dir, i))]
+    if folders:
+        return str(max(folders) + plus)
+    return '1'
+
+
 def generate_mask(points, dir_save):
     mask = np.zeros((512, 512), dtype=np.uint8)
-    dir_png = os.path.join(dir_save, 'client.png')
-    dir_np = os.path.join(dir_save, 'client.npy')
-    dir_original_np = os.path.join(dir_save, 'original.npy')
-    dir_original = os.path.join(dir_save, 'original.png')
+
+    step = get_step_dir(dir_save, 1)
+    step_back = get_step_dir(dir_save)
+    dir_client_np = os.path.join(dir_save, step_back, 'client.npy')
 
     if len(points) > 2:
+        os.mkdir(os.path.join(dir_save, step))
         path = Path([(point["x"], point["y"]) for point in points])
         y_indices, x_indices = np.meshgrid(np.arange(mask.shape[0]), np.arange(mask.shape[1]))
         points_array = np.column_stack((x_indices.ravel(), y_indices.ravel()))
@@ -292,16 +303,16 @@ def generate_mask(points, dir_save):
         ax.set_axis_off()
         fig.add_axes(ax)
 
-        load_orig = np.load(dir_original_np)
-        if os.path.exists(dir_np):
-            flipped_image = np.logical_or(np.load(dir_np), flipped_image)
+        if os.path.exists(dir_client_np):
+            flipped_image = np.logical_or(np.load(dir_client_np), flipped_image)
 
-        ax.imshow(load_orig, cmap='gray')
+        ax.imshow(np.load(os.path.join(dir_save, 'original.npy')), cmap='gray')
         ax.imshow(flipped_image, alpha=0.5, cmap='gray')
 
-        fig.savefig(dir_original, dpi=512)
-        plt.imsave(dir_png, flipped_image, cmap="gray")
-        np.save(dir_np, flipped_image)
+        # SAVE ALL
+        fig.savefig(os.path.join(dir_save, step, 'original.png'), dpi=512)
+        plt.imsave(os.path.join(dir_save, step, 'client.png'), flipped_image, cmap="gray")
+        np.save(os.path.join(dir_save, step, 'client.npy'), flipped_image)
 
 
 @csrf_exempt
@@ -315,9 +326,15 @@ def save_mask(request):
     return JsonResponse({'redirect_url': reverse('download_file'), 'redirect_main': reverse('main')})
 
 
+# TODO: Добавить возможность отправлять данные на дообучение
 def download_file(request):
     output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
-    save_dir = os.path.join(output_dir, 'client.png')
+    step = get_step_dir(output_dir)
+
+    if os.path.exists(os.path.join(output_dir, step, 'client.png')):
+        save_dir = os.path.join(output_dir, step, 'client.png')
+    else:
+        save_dir = os.path.join(output_dir, 'original.png')
 
     with open(save_dir, 'rb') as f:
         file_data = f.read()
@@ -325,33 +342,40 @@ def download_file(request):
     response = HttpResponse(file_data, content_type='image/png')
     response['Content-Disposition'] = f'attachment; filename="client_mask.png"'
 
+    shutil.rmtree(output_dir)
+
     return response
 
 
 @csrf_exempt
 def add_mask(request):
     output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
-    original_dir = os.path.join(output_dir, 'original.png')
 
     if request.method == "POST":
         data = json.loads(request.body)
         points = data.get('points', [])
         generate_mask(points, output_dir)
 
-    data = {'img': original_dir[11:]}
-    return render(request, 'annotation.html', data)
+    return HttpResponse()
 
 
 @csrf_exempt
 def del_mask(request):
     output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
-    original_dir = os.path.join(output_dir, 'original.png')
+    step = get_step_dir(output_dir, 1)
+    new_dir = os.path.join(output_dir, step)
+    os.mkdir(new_dir)
     original_dir_np = os.path.join(output_dir, 'original.npy')
 
-    os.remove(os.path.join(output_dir, 'client.npy'))
+    plt.imsave(new_dir, np.load(original_dir_np), cmap="gray")
 
-    data = {'img': original_dir[11:]}
+    return HttpResponse()
 
-    plt.imsave(original_dir, np.load(original_dir_np), cmap="gray")
 
-    return render(request, 'annotation.html', data)
+@csrf_exempt
+def back_mask(request):
+    output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
+    step = get_step_dir(output_dir)
+    shutil.rmtree(os.path.join(output_dir, step))
+
+    return HttpResponse()
