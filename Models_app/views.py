@@ -363,19 +363,10 @@ def add_mask(request):
 def del_mask(request):
     output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
     step = get_step_dir(output_dir, 1)
-    new_dir = os.path.join(output_dir, step)
-    os.mkdir(new_dir)
+    new_dir = os.path.join(output_dir, step, 'restored_image.png')
+    os.makedirs(os.path.dirname(new_dir), exist_ok=True)
     original_dir_np = os.path.join(output_dir, 'original.npy')
 
     plt.imsave(new_dir, np.load(original_dir_np), cmap="gray")
-
-    return HttpResponse()
-
-
-@csrf_exempt
-def back_mask(request):
-    output_dir = f'staticfiles/output/{get_user_uuid(request)}/'
-    step = get_step_dir(output_dir)
-    shutil.rmtree(os.path.join(output_dir, step))
 
     return HttpResponse()

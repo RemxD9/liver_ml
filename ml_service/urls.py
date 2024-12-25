@@ -18,5 +18,4 @@ urlpatterns = [
     path('download_file/', views.download_file, name='download_file'),
     path('add_mask/', views.add_mask, name='add_mask'),
     path('del_mask/', views.del_mask, name='del_mask'),
-    path('back_mask/', views.back_mask, name='back_mask'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

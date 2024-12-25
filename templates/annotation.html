@@ -20,36 +20,66 @@
 <canvas id="imageCanvas"></canvas>
 <div class="buttons">
     <button class="but_add" onclick="addMask()">Добавить контур</button>
-    <button class="but_add" onclick="backMask()">Назад</button>
     <button onclick="saveMask()">Скачать и отправить данные для дообучения</button>
     <button class="but_add" onclick="delMask()">Сбросить</button>
+    <button class="but_add" onclick="watch()">Вернуться к просмотру</button>
 </div>
 <!--    <button onclick="pushMask()">Отправить маску разработчикам</button>-->
 
 <script>
-        const canvas = document.getElementById('imageCanvas');
-        const ctx = canvas.getContext('2d');
-        let points = [];
+    const canvas = document.getElementById('imageCanvas');
+    const ctx = canvas.getContext('2d');
+    let points = [];
+    let isDrawing = false; // Флаг для отслеживания, рисуем ли мы сейчас
 
-        // Load image
-        const img = new Image();
-        img.src = "{% static img %}"
-        img.onload = () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
+    // Загрузка изображения
+    const img = new Image();
+    img.src = "{% static img %}";
+    img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+    };
+
+    // Начало рисования
+    canvas.addEventListener('mousedown', (event) => {
+        isDrawing = true; // Устанавливаем флаг
+        const { x, y } = getMousePos(event); // Получаем координаты мыши
+        points.push({ x, y }); // Добавляем первую точку
+        ctx.beginPath(); // Начинаем новый путь рисования
+        ctx.moveTo(x, y);
+    });
+
+    // Рисование
+    canvas.addEventListener('mousemove', (event) => {
+        if (!isDrawing) return; // Рисуем только если мышь зажата
+        const { x, y } = getMousePos(event);
+        points.push({ x, y }); // Добавляем текущую точку в массив
+        ctx.lineTo(x, y); // Рисуем линию до текущей точки
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+        ctx.stroke(); // Отображаем линию
+    });
+
+    // Конец рисования
+    canvas.addEventListener('mouseup', () => {
+        isDrawing = false; // Сбрасываем флаг
+        ctx.closePath(); // Завершаем путь
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        isDrawing = false; // Останавливаем рисование, если мышь ушла за границы
+        ctx.closePath();
+    });
+
+    // Получение позиции мыши относительно Canvas
+    function getMousePos(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
         };
-
-
-        // Handle clicks
-        canvas.addEventListener('click', (event) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            points.push({ x, y });
-            ctx.fillStyle = "red";
-            ctx.fillRect(x - 2, y - 2, 4, 4);
-        });
+    }
 
         // Send points to the server
         function saveMask() {
@@ -93,22 +123,9 @@
                   }, 1000);
         };
 
-
-        function backMask() {
-            fetch('/back_mask/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-            })
-
-            setTimeout(() => {
-                      location.reload();
-                  }, 1000);
+        function watch() {
+            return window.location.replace("{% url 'results' %}")
         };
-
-
-
-
-
 
 </script>
 </body>
